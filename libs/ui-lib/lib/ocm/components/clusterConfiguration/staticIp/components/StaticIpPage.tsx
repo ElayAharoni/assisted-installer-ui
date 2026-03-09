@@ -49,24 +49,29 @@ export const StaticIpPage: React.FC<StaticIpPageProps> = ({
     return getStaticIpInfo(infraEnv);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  if (!initialStaticIpInfo) {
-    return null;
-  }
-  const onFormStateChange = (formState: StaticIpFormState) => {
-    const hasFilledData =
-      clusterWizardContext.currentStepId === 'static-ip-host-configurations' || !formState.isEmpty;
-    setConfirmOnChangeView(hasFilledData);
-    onFormStateChangeParent(formState);
-  };
 
-  const viewProps: StaticIpViewProps = {
-    onFormStateChange,
-    infraEnv,
-    updateInfraEnv,
-    showEmptyValues: viewChanged,
-  };
+  const onFormStateChange = React.useCallback(
+    (formState: StaticIpFormState) => {
+      const hasFilledData =
+        clusterWizardContext.currentStepId === 'static-ip-host-configurations' ||
+        !formState.isEmpty;
+      setConfirmOnChangeView(hasFilledData);
+      onFormStateChangeParent(formState);
+    },
+    [clusterWizardContext.currentStepId, onFormStateChangeParent],
+  );
 
-  const getContent = () => {
+  const viewProps: StaticIpViewProps = React.useMemo(
+    () => ({
+      onFormStateChange,
+      infraEnv,
+      updateInfraEnv,
+      showEmptyValues: viewChanged,
+    }),
+    [onFormStateChange, infraEnv, updateInfraEnv, viewChanged],
+  );
+
+  const content = React.useMemo(() => {
     switch (clusterWizardContext.currentStepId) {
       case 'static-ip-yaml-view':
         return <YamlView {...viewProps} />;
@@ -75,14 +80,16 @@ export const StaticIpPage: React.FC<StaticIpPageProps> = ({
       case 'static-ip-host-configurations':
         return <FormViewHosts {...viewProps} />;
       default:
-        throw `Unexpected wizard step id ${clusterWizardContext.currentStepId} when entering static ip page`;
+        throw new Error(
+          `Unexpected wizard step id ${clusterWizardContext.currentStepId} when entering static ip page`,
+        );
     }
-  };
+  }, [clusterWizardContext.currentStepId, viewProps]);
 
-  const content = getContent();
-  if (!content) {
+  if (!initialStaticIpInfo) {
     return null;
   }
+
   return (
     <Grid hasGutter>
       <GridItem>

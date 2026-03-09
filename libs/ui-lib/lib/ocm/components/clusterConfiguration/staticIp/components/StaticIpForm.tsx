@@ -9,6 +9,7 @@ import { getApiErrorMessage } from '../../../../../common/api';
 import { StaticIpFormProps } from './propTypes';
 import { selectCurrentClusterPermissionsState } from '../../../../store/slices/current-cluster/selectors';
 
+/** Reports form state and triggers save on every value change (useFormikAutoSave) */
 const AutosaveWithParentUpdate = <StaticIpFormValues extends object>({
   onFormStateChange,
   getEmptyValues,
@@ -16,28 +17,51 @@ const AutosaveWithParentUpdate = <StaticIpFormValues extends object>({
   onFormStateChange: StaticIpFormProps<StaticIpFormValues>['onFormStateChange'];
   getEmptyValues: StaticIpFormProps<StaticIpFormValues>['getEmptyValues'];
 }) => {
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const emptyValues = React.useMemo(() => getEmptyValues(), []);
-  const { isSubmitting, isValid, touched, errors, values, initialValues, submitForm } =
-    useFormikContext<StaticIpFormValues>();
+  const emptyValues = React.useMemo(() => getEmptyValues(), [getEmptyValues]);
+  const {
+    isSubmitting,
+    isValid,
+    touched,
+    errors,
+    values,
+    initialValues,
+    submitForm,
+    validateForm,
+  } = useFormikContext<StaticIpFormValues>();
 
-  const isEmpty = React.useMemo<boolean>(() => {
-    return isEqual(values, emptyValues);
-  }, [values, emptyValues]);
-
-  const isAutoSaveRunning = useFormikAutoSave();
+  const isEmpty = React.useMemo(() => isEqual(values, emptyValues), [values, emptyValues]);
+  const isAutoSaveRunning = useFormikAutoSave(0);
 
   React.useEffect(() => {
     if (!isEqual(emptyValues, initialValues)) {
       void submitForm();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [emptyValues, initialValues, submitForm]);
 
   React.useEffect(() => {
-    onFormStateChange({ isSubmitting, isAutoSaveRunning, isValid, touched, errors, isEmpty });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSubmitting, isValid, isAutoSaveRunning, touched, errors]);
+    void validateForm();
+  }, [validateForm]);
+
+  React.useEffect(() => {
+    onFormStateChange({
+      isSubmitting,
+      isAutoSaveRunning,
+      isValid,
+      touched,
+      errors,
+      isEmpty,
+      values: values as Record<string, unknown>,
+    });
+  }, [
+    isSubmitting,
+    isValid,
+    isAutoSaveRunning,
+    touched,
+    errors,
+    values,
+    isEmpty,
+    onFormStateChange,
+  ]);
   return null;
 };
 
@@ -57,46 +81,46 @@ export const StaticIpForm = <StaticIpFormValues extends object>({
   const { isViewerMode } = useSelector(selectCurrentClusterPermissionsState);
   const [initialValues, setInitialValues] = React.useState<StaticIpFormValues | undefined>();
   React.useEffect(() => {
-    if (showEmptyValues) {
-      //after view changed the formik should be rendered with empty values
-      setInitialValues(getEmptyValues());
-    } else {
-      setInitialValues(getInitialValues(infraEnv));
-    }
+    setInitialValues(showEmptyValues ? getEmptyValues() : getInitialValues(infraEnv));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleSubmit = React.useCallback<FormikConfig<StaticIpFormValues>['onSubmit']>(
+    async (values) => {
+      clearAlerts();
+      try {
+        await updateInfraEnv({
+          staticNetworkConfig: getUpdateParams(infraEnv, values),
+        });
+      } catch (error) {
+        captureException(error);
+        addAlert({
+          title: 'Failed to update the static network config',
+          message: getApiErrorMessage(error),
+        });
+      }
+    },
+    [clearAlerts, updateInfraEnv, getUpdateParams, infraEnv, captureException, addAlert],
+  );
+
+  const validate = React.useCallback(
+    (values: StaticIpFormValues) => {
+      try {
+        validationSchema.validateSync(values, {
+          abortEarly: false,
+          context: { values },
+        });
+        return {};
+      } catch (error) {
+        return yupToFormErrors(error);
+      }
+    },
+    [validationSchema],
+  );
 
   if (!initialValues) {
     return null;
   }
-
-  const handleSubmit: FormikConfig<StaticIpFormValues>['onSubmit'] = async (values) => {
-    clearAlerts();
-    try {
-      const staticNetworkConfig = getUpdateParams(infraEnv, values);
-      await updateInfraEnv({
-        staticNetworkConfig: staticNetworkConfig,
-      });
-    } catch (error) {
-      captureException(error);
-      addAlert({
-        title: 'Failed to update the static network config',
-        message: getApiErrorMessage(error),
-      });
-    }
-  };
-
-  const validate = (values: StaticIpFormValues) => {
-    try {
-      validationSchema.validateSync(values, {
-        abortEarly: false,
-        context: { values },
-      });
-      return {};
-    } catch (error) {
-      return yupToFormErrors(error);
-    }
-  };
 
   const onSubmit = isViewerMode ? () => Promise.resolve() : handleSubmit;
   return (

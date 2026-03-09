@@ -28,22 +28,29 @@ const DisconnectedStaticIp: React.FC = () => {
     getInitialFormStateProps(),
   );
 
-  const onFormStateChange = (formState: StaticIpFormState) => {
+  const onFormStateChange = React.useCallback((formState: StaticIpFormState) => {
     setFormStateProps(formState);
-  };
+  }, []);
 
-  const updateInfraEnv = async (params: InfraEnvUpdateParams) => {
-    if (!disconnectedInfraEnv?.id) {
-      throw new Error('No disconnected infraEnv available');
-    }
-    const { data: updatedInfraEnv } = await InfraEnvsAPI.update(disconnectedInfraEnv.id, params);
-    setDisconnectedInfraEnv(updatedInfraEnv);
-    return updatedInfraEnv;
-  };
+  const updateInfraEnv = React.useCallback(
+    async (params: InfraEnvUpdateParams) => {
+      if (!disconnectedInfraEnv?.id) {
+        throw new Error('No disconnected infraEnv available');
+      }
+      const { data: updatedInfraEnv } = await InfraEnvsAPI.update(disconnectedInfraEnv.id, params);
+      setDisconnectedInfraEnv({
+        ...updatedInfraEnv,
+        hostsNetworkConfigurationType: disconnectedInfraEnv.hostsNetworkConfigurationType,
+      });
+      return updatedInfraEnv;
+    },
+    [disconnectedInfraEnv, setDisconnectedInfraEnv],
+  );
 
-  const isNextDisabled =
-    formState.isAutoSaveRunning || !formState.isValid || !!alerts.length || formState.isSubmitting;
+  const isNextDisabled = !formState.isValid || !!alerts.length || formState.isSubmitting;
   const errorFields = getFormikErrorFields<object>(formState.errors, formState.touched);
+  const handleNext = React.useCallback(() => moveNext(), [moveNext]);
+  const handleBack = React.useCallback(() => moveBack(), [moveBack]);
 
   const footer = (
     <ClusterWizardFooter
@@ -51,10 +58,10 @@ const DisconnectedStaticIp: React.FC = () => {
       alertContent={null}
       errorFields={errorFields}
       isSubmitting={formState.isSubmitting}
-      onNext={() => moveNext()}
-      onBack={() => moveBack()}
+      onNext={handleNext}
+      onBack={handleBack}
       isNextDisabled={isNextDisabled}
-      isBackDisabled={formState.isSubmitting || formState.isAutoSaveRunning}
+      isBackDisabled={formState.isSubmitting}
     />
   );
 
