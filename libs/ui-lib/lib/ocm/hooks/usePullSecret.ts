@@ -1,6 +1,7 @@
 import React from 'react';
 import { getApiErrorMessage, handleApiError, isInOcm } from '../../common/api';
 import { useAlerts } from '../../common';
+import { normalizePullSecretFromManifest } from '../../common/normalizePullSecretFromManifest';
 import { AccessTokenAPI } from '../../common/api/accounts-management-service/access-token-api';
 
 /**
@@ -34,7 +35,7 @@ export default function usePullSecret(isSingleClusterFeatureEnabled?: boolean) {
 
       if (isSingleClusterFeatureEnabled) {
         const fromBridge = await fetchPullSecretFromBridge();
-        setPullSecret(fromBridge ?? '');
+        setPullSecret(fromBridge ? normalizePullSecretFromManifest(fromBridge) : '');
         return;
       }
 
